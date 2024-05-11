@@ -6,7 +6,7 @@ from transformer_lens.utils import get_act_name, tokenize_and_concatenate
 
 from datasets import load_dataset
 from sae_lens.toolkit.pretrained_saes import get_gpt2_res_jb_saes
-
+from sae_lens
 import pandas as pd
 import plotly.express as px
 
@@ -15,13 +15,13 @@ torch.set_grad_enabled(False)
 # %%
 model = HookedTransformer.from_pretrained("gpt2-small")
 
-hook_name = get_act_name("resid_pre", 8)
+hook_name = get_act_name("resid_pre", 1)
 saes, sparsities = get_gpt2_res_jb_saes(hook_name)
 sae = saes[hook_name]
 # %%
 openwebtext = load_dataset("stas/openwebtext-10k", split='train')
 dataset = tokenize_and_concatenate(openwebtext, model.tokenizer, max_length=30)
-data_loader = DataLoader(dataset, batch_size=16, shuffle=False, drop_last=True)
+data_loader = DataLoader(dataset, batch_size=64, shuffle=False, drop_last=True)
 tokens = next(iter(data_loader))['tokens']
 
 del openwebtext
@@ -35,7 +35,8 @@ resid = cache[hook_name]
 
 # %%
 sae.to(resid.device)
-sae_out, feature_acts, loss, mse_loss, l1_loss, ghost_grad_loss = sae(resid)
+# sae_out, feature_acts, loss, mse_loss, l1_loss, ghost_grad_loss = sae(resid)
+_, feature_acts, _, _, _, _ = sae(resid)
 
 # feature_acts with shape: batch, pos, n_features
 
@@ -55,10 +56,10 @@ act_mean = feature_acts.mean(dim=(0, 1)) # shape: n_features
 px.histogram((act_pos_mean - act_mean).cpu(), log_y=True)
 # %%
 # 
-
-((act_pos_mean - act_mean) > 1).sum()
+thres = 0.8
+((act_pos_mean - act_mean) > thres).sum()
 # %%
-target_features = (act_pos_mean - act_mean) > 1
+target_features = (act_pos_mean - act_mean) > thres
 target_features_act = feature_acts[:, :, target_features]
 
 # %%
@@ -66,9 +67,14 @@ target_features_act.shape
 # %%
 # px.scatter(target_features_act[:, :, 0].cpu())
 
-df = pd.DataFrame(target_features_act[:, :, 9].cpu().numpy())
+df = pd.DataFrame(target_features_act[:, :, 1].cpu().numpy())
 df_melted = df.melt(var_name='x', value_name='y')
 fig = px.scatter(df_melted, x='x', y='y')
 fig.show()
 
 # %%
+# shape: d_vocab, n_ctx, d_model
+# pass in sae, get d_vocab, n_ctx, n_features
+# mean/sum over d_vocab, get top k features for each position
+
+
