@@ -1,6 +1,7 @@
 # %%
 import einops
 import torch
+import torch.nn.functional as F
 from transformer_lens import HookedTransformer
 from transformer_lens.utils import get_act_name
 
@@ -231,14 +232,14 @@ px.histogram(
 
 
 # %%
-min_cos_sim = WDec_WPos_ctx_cos_sim.min(dim=1).values
+# min_cos_sim = WDec_WPos_ctx_cos_sim.min(dim=1).values
 
-px.histogram(
-    min_cos_sim.cpu().numpy(),
-    title="Min cos sim between W_dec and W_pos[:128] for each feature",
-    labels={"value": "min cos sim"},
-    log_y=True,
-).show()
+# px.histogram(
+#     min_cos_sim.cpu().numpy(),
+#     title="Min cos sim between W_dec and W_pos[:128] for each feature",
+#     labels={"value": "min cos sim"},
+#     log_y=True,
+# ).show()
 
 
 # %%
@@ -247,7 +248,41 @@ target_features = max_cos_sim > 0.5
 print(target_features.sum())
 
 # %%
-# calc re loss
+# calc re
+sae_in = resid_pre - (sae.b_dec * sae.cfg.apply_b_dec_to_input)
+hidden_pre = (sae_in @ sae.W_enc) + sae.b_enc
+feature_act: Float[Tensor, "batch pos n_features"] = F.relu(hidden_pre)
+sae_out: Float[Tensor, "batch pos d_model"] = (feature_act @ sae.W_dec) + sae.b_dec
+
+# features not in target_features are set to 0
+feature_act_pos = feature_act.clone()
+feature_act_pos[:, :, ~target_features] = 0
+sae_out_pos: Float[Tensor, "batch pos d_model"] = (
+    feature_act_pos @ sae.W_dec
+) + sae.b_dec
+
+re_Fea_all_Emb_all = (sae_out - resid_pre).norm(dim=(0, -1))
+# px.line(re.cpu().numpy()).show()
+
+
+pos_emb = model.W_pos[:max_length].unsqueeze(dim=0)
+re_Fea_pos_Emb_pos = (sae_out_pos - pos_emb).norm(dim=(0, -1))
+# px.line(re_pos.cpu().numpy()).show()
+
+re_Fea_pos_Emb_all = (sae_out_pos - resid_pre).norm(dim=(0, -1))
+
+df = pd.DataFrame(
+    {
+        "Fea_all_Emb_all": re_Fea_all_Emb_all.cpu().numpy(),
+        "Fea_pos_Emb_pos": re_Fea_pos_Emb_pos.cpu().numpy(),
+        "Fea_pos_Emb_all": re_Fea_pos_Emb_all.cpu().numpy(),
+    }
+)
+
+# Using Plotly Express to plot both lines on the same graph
+fig = px.line(df, title="RE for sae out")
+fig.show()
+
 
 # %%
 # NOTES
