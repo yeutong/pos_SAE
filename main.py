@@ -292,6 +292,7 @@ fig.show()
 """
 ablate everything that is not a flat line on a plot of the form feature act vs pos for a fixed token
 """
+# calc inverse token_score
 n_ctx = 128
 batch_i = 0
 batch_size = 200
@@ -320,7 +321,35 @@ for batch_i in range(model.cfg.d_vocab // batch_size + 1):
     )
     min_stds = torch.where(tmp_stds < min_stds, tmp_stds, min_stds)
 
+# %%
+# calc inverse pos score
+n_ctx = 128
 
+min_stds_pos = torch.ones(sae.cfg.d_sae, device=device) * float("inf")
+min_token_ids_pos = torch.zeros(sae.cfg.d_sae, dtype=torch.int, device=device)
+
+for pos in range(n_ctx):
+    print(pos)
+
+    emb = model.W_E.unsqueeze(dim=1)
+    pos = model.W_pos[[pos]].unsqueeze(dim=0)
+    resid_pre_emb_pos = emb + pos
+    hidden_pre: Float[Tensor, "batch pos n_features"] = sae._encode_with_hidden_pre(
+        resid_pre_emb_pos
+    )[1]
+    # for each features, get std along pos dimention
+    stds: Float[Tensor, "batch n_features"] = hidden_pre.std(dim=0)
+
+    tmp_stds, tmp_token_id = stds.min(dim=0)
+
+    min_token_ids_pos = torch.where(
+        tmp_stds < min_stds_pos, tmp_token_id, min_token_ids_pos
+    )
+    min_stds_pos = torch.where(tmp_stds < min_stds_pos, tmp_stds, min_stds_pos)
+
+
+# %%
+px.scatter(x=min_stds.cpu().numpy(), y=min_stds_pos.cpu().numpy()).show()
 # %%
 # px.histogram(min_stds.cpu().numpy(), log_y=True, marginal="box").show()
 # px.histogram(min_token_ids.cpu().numpy(), log_y=True, marginal="box").show()
