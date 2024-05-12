@@ -75,3 +75,9 @@ fig.show()
 # %%
 get_neuronpedia_quick_list(pos_features[:10].tolist(), layer)
 # %%
+naive_method_score = feature_acts.mean(dim=0).max(dim=0).values
+# %%
+px.histogram(naive_method_score.cpu(), log_y=True, title="Naive Method Score Histogram")
+# %%
+px.scatter(x=naive_method_score.cpu(), y=mutual_info_pos.cpu(), title="Naive Method Score vs Mutual Information")
+# %%
