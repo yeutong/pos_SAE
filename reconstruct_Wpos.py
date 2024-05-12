@@ -244,7 +244,7 @@ px.histogram(
 
 # %%
 # get features whose max cos sim with W_E (max_cos_sim) > 0.5
-target_features = max_cos_sim > 0.5
+target_features = max_cos_sim > 1
 print(target_features.sum())
 
 # %%
